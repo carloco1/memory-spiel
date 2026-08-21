@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐛 Wurmspiel</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #d7f0a8 0%, #8bc34a 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      touch-action: manipulation;
+    }
+
+    .screen { display: none; width: 100%; max-width: 560px; text-align: center; }
+    .screen.active { display: block; }
+
+    h1 { font-size: 3rem; margin-bottom: 12px; }
+    p  { font-size: 1.2rem; margin-bottom: 24px; color: #3d6b1f; }
+
+    .difficulty-buttons {
+      display: flex;
+      gap: 16px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 16px;
+      padding: 18px 28px;
+      font-size: 1.1rem;
+      font-weight: bold;
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      line-height: 1.6;
+    }
+    .btn:hover  { transform: translateY(-3px); box-shadow: 0 6px 14px rgba(0,0,0,0.25); }
+    .btn:active { transform: translateY(0);    box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+    .btn:focus-visible { outline: 3px solid #2f5115; outline-offset: 3px; }
+
+    .btn-easy   { background: #66bb6a; color: #fff; }
+    .btn-medium { background: #f9a825; color: #fff; }
+    .btn-hard   { background: #ef5350; color: #fff; }
+    .btn-small  { background: #ffffff; color: #3d6b1f; padding: 8px 14px; font-size: 0.9rem; border-radius: 10px; }
+
+    .hint {
+      font-size: 0.95rem;
+      color: #4d7a2a;
+      margin-top: 22px;
+      line-height: 1.7;
+    }
+    .hint kbd {
+      background: #fff;
+      border-radius: 6px;
+      padding: 2px 7px;
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: bold;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+
+    .sister-link {
+      display: inline-block;
+      margin-top: 20px;
+      color: #3d6b1f;
+      font-size: 0.95rem;
+      text-decoration: none;
+      border-bottom: 2px solid rgba(61,107,31,0.35);
+      padding-bottom: 2px;
+    }
+    .sister-link:hover { border-bottom-color: #3d6b1f; }
+
+    /* Spielfeld */
+    .game-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 16px;
+      padding: 10px 16px;
+      background: rgba(255,255,255,0.55);
+      border-radius: 12px;
+    }
+
+    .score-group { display: flex; gap: 14px; align-items: center; }
+    .score {
+      font-size: 1.3rem;
+      font-weight: bold;
+      color: #2f5115;
+      font-variant-numeric: tabular-nums;
+    }
+    .record {
+      font-size: 0.95rem;
+      color: #5b8a35;
+      font-variant-numeric: tabular-nums;
+    }
+    .header-buttons { display: flex; gap: 8px; }
+
+    .board-wrap { position: relative; display: inline-block; }
+
+    canvas {
+      display: block;
+      background: #f7fce9;
+      border-radius: 16px;
+      box-shadow: 0 6px 18px rgba(47,81,21,0.28);
+      touch-action: none;
+    }
+
+    .overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 6px;
+      background: rgba(247,252,233,0.82);
+      border-radius: 16px;
+      font-size: 4rem;
+      font-weight: bold;
+      color: #3d6b1f;
+    }
+    .overlay.active { display: flex; }
+    .overlay small { font-size: 1.1rem; font-weight: normal; }
+
+    /* Steuerkreuz */
+    .dpad {
+      display: grid;
+      grid-template-columns: repeat(3, 62px);
+      grid-template-rows: repeat(2, 62px);
+      gap: 8px;
+      justify-content: center;
+      margin-top: 18px;
+    }
+    .dpad button {
+      border: none;
+      border-radius: 14px;
+      background: rgba(255,255,255,0.75);
+      color: #3d6b1f;
+      font-size: 1.5rem;
+      cursor: pointer;
+      box-shadow: 0 3px 6px rgba(0,0,0,0.18);
+    }
+    .dpad button:active { transform: translateY(2px); box-shadow: 0 1px 3px rgba(0,0,0,0.18); }
+    .dpad button:focus-visible { outline: 3px solid #2f5115; outline-offset: 2px; }
+    .dpad .up    { grid-column: 2; grid-row: 1; }
+    .dpad .left  { grid-column: 1; grid-row: 2; }
+    .dpad .down  { grid-column: 2; grid-row: 2; }
+    .dpad .right { grid-column: 3; grid-row: 2; }
+
+    /* Game-Over */
+    .over-box {
+      background: rgba(255,255,255,0.75);
+      border-radius: 24px;
+      padding: 40px;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 16px;
+    }
+    .over-emoji { font-size: 4rem; }
+    h2 { font-size: 2.2rem; color: #2f5115; }
+    #over-reason { font-size: 1.15rem; color: #4d7a2a; margin: 0; }
+    .final-score { font-size: 1.5rem; font-weight: bold; color: #2f5115; }
+    .new-record {
+      background: #f9a825;
+      color: #fff;
+      border-radius: 20px;
+      padding: 6px 16px;
+      font-weight: bold;
+      animation: pop 0.7s ease-in-out infinite alternate;
+    }
+
+    @keyframes pop {
+      from { transform: scale(1);    }
+      to   { transform: scale(1.07); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      * { animation: none !important; transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Startbildschirm -->
+  <div id="screen-start" class="screen active">
+    <h1>🐛 Wurmspiel</h1>
+    <p>Friss alles, was im Beet wächst — aber beiß dich nicht selbst!</p>
+    <div class="difficulty-buttons">
+      <button onclick="startGame(200)" class="btn btn-easy">🐌 Langsam<br><small>zum Üben</small></button>
+      <button onclick="startGame(130)" class="btn btn-medium">🐛 Mittel<br><small>normal</small></button>
+      <button onclick="startGame(80)"  class="btn btn-hard">🚀 Schnell<br><small>für Profis</small></button>
+    </div>
+    <p class="hint">
+      Steuern mit <kbd>←</kbd> <kbd>↑</kbd> <kbd>↓</kbd> <kbd>→</kbd> oder <kbd>W</kbd> <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd><br>
+      Pause mit <kbd>Leertaste</kbd> · am Handy wischen oder das Steuerkreuz nutzen
+    </p>
+    <a class="sister-link" href="memory.html">🧠 Lieber Memory spielen?</a>
+  </div>
+
+  <!-- Spielfeld -->
+  <div id="screen-game" class="screen">
+    <div class="game-header">
+      <div class="score-group">
+        <span id="score" class="score">🍎 0</span>
+        <span id="record" class="record">🏆 0</span>
+      </div>
+      <div class="header-buttons">
+        <button onclick="togglePause()" id="pause-btn" class="btn btn-small">⏸ Pause</button>
+        <button onclick="backToStart()" class="btn btn-small">↩ Neu</button>
+      </div>
+    </div>
+    <div class="board-wrap">
+      <canvas id="board"></canvas>
+      <div id="overlay" class="overlay"></div>
+    </div>
+    <div class="dpad">
+      <button class="up"    onclick="setDir(0,-1)" aria-label="Hoch">⬆️</button>
+      <button class="left"  onclick="setDir(-1,0)" aria-label="Links">⬅️</button>
+      <button class="down"  onclick="setDir(0,1)"  aria-label="Runter">⬇️</button>
+      <button class="right" onclick="setDir(1,0)"  aria-label="Rechts">➡️</button>
+    </div>
+  </div>
+
+  <!-- Game-Over -->
+  <div id="screen-over" class="screen">
+    <div class="over-box">
+      <div id="over-emoji" class="over-emoji">💥</div>
+      <h2>Vorbei!</h2>
+      <p id="over-reason"></p>
+      <div id="final-score" class="final-score"></div>
+      <div id="record-badge" class="new-record" style="display:none">🏆 Neuer Rekord!</div>
+      <div class="difficulty-buttons">
+        <button onclick="replay()" class="btn btn-easy">🔄 Nochmal</button>
+        <button onclick="backToStart()" class="btn btn-small">🏠 Startseite</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const GRID = 18;                        // 18 x 18 Felder
+
+    // Früchte werden gezeichnet statt als Emoji gesetzt: Canvas-Emoji fällt je
+    // nach System auf eine farblose Ersatzschrift zurück — dann wäre das Futter
+    // kaum zu sehen.
+    const FRUITS = [
+      { body: '#e53935', leaf: '#43a047' },  // Apfel
+      { body: '#ec407a', leaf: '#66bb6a' },  // Erdbeere
+      { body: '#fb8c00', leaf: '#7cb342' },  // Möhre
+      { body: '#8e24aa', leaf: '#558b2f' },  // Pflaume
+      { body: '#5c6bc0', leaf: '#689f38' },  // Heidelbeere
+      { body: '#fdd835', leaf: '#9ccc65' }   // Mais
+    ];
+
+    const canvas  = document.getElementById('board');
+    const ctx     = canvas.getContext('2d');
+    const overlay = document.getElementById('overlay');
+
+    let cell = 24;                          // Kantenlänge einer Zelle in CSS-Pixeln
+
+    const state = {
+      snake: [],        // [{x,y}], Index 0 = Kopf
+      prev: [],         // Positionen vor dem letzten Tick (für weiche Bewegung)
+      dir:  { x: 1, y: 0 },
+      queue: [],        // gepufferte Richtungswechsel
+      food: null,
+      fruit: FRUITS[0],
+      score: 0,
+      speed: 130,
+      running: false,
+      paused: false,
+      lastTick: 0,
+      tickTimer: null,
+      rafId: null
+    };
+
+    /* ---------- Rekord (übersteht auch blockierten Speicher) ---------- */
+
+    function recordKey(speed) { return `wurm-rekord-${speed}`; }
+
+    function loadRecord(speed) {
+      try { return Number(localStorage.getItem(recordKey(speed))) || 0; }
+      catch (e) { return 0; }
+    }
+
+    function saveRecord(speed, value) {
+      try { localStorage.setItem(recordKey(speed), String(value)); }
+      catch (e) { /* privates Fenster o.ä. — Rekord gilt nur für diese Runde */ }
+    }
+
+    /* ---------- Bildschirme ---------- */
+
+    function showScreen(id) {
+      document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+      document.getElementById(id).classList.add('active');
+    }
+
+    function backToStart() {
+      stopLoop();
+      showScreen('screen-start');
+    }
+
+    function replay() { startGame(state.speed); }
+
+    /* ---------- Canvas ---------- */
+
+    function sizeCanvas() {
+      const available = Math.min(520, window.innerWidth - 40, window.innerHeight - 260);
+      const size = Math.max(240, Math.floor(available / GRID) * GRID);
+      const dpr  = window.devicePixelRatio || 1;
+
+      canvas.style.width  = size + 'px';
+      canvas.style.height = size + 'px';
+      canvas.width  = Math.round(size * dpr);
+      canvas.height = Math.round(size * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      cell = size / GRID;
+    }
+
+    window.addEventListener('resize', () => {
+      if (!document.getElementById('screen-game').classList.contains('active')) return;
+      sizeCanvas();
+      draw(1);
+    });
+
+    /* ---------- Spielstart ---------- */
+
+    function startGame(speed) {
+      state.speed  = speed;
+      state.score  = 0;
+      state.dir    = { x: 1, y: 0 };
+      state.queue  = [];
+      state.paused = false;
+
+      const midY = Math.floor(GRID / 2);
+      state.snake = [{ x: 4, y: midY }, { x: 3, y: midY }, { x: 2, y: midY }];
+      state.prev  = state.snake.map(s => ({ ...s }));
+
+      spawnFood();
+      updateScore();
+      document.getElementById('record').textContent = '🏆 ' + loadRecord(speed);
+      document.getElementById('pause-btn').textContent = '⏸ Pause';
+
+      showScreen('screen-game');
+      sizeCanvas();
+      draw(1);
+
+      countdown(3);
+    }
+
+    function countdown(n) {
+      if (n === 0) {
+        overlay.classList.remove('active');
+        beginLoop();
+        return;
+      }
+      overlay.classList.add('active');
+      overlay.innerHTML = n === 1 ? 'Los!' : String(n);
+      setTimeout(() => countdown(n - 1), 700);
+    }
+
+    function beginLoop() {
+      state.running  = true;
+      state.lastTick = performance.now();
+      state.tickTimer = setInterval(tick, state.speed);
+      state.rafId     = requestAnimationFrame(render);
+    }
+
+    function stopLoop() {
+      state.running = false;
+      clearInterval(state.tickTimer);
+      cancelAnimationFrame(state.rafId);
+      state.tickTimer = null;
+      state.rafId = null;
+    }
+
+    /* ---------- Steuerung ---------- */
+
+    function setDir(x, y) {
+      // Gegen die eigene Laufrichtung geht nicht — sonst frisst sich der Wurm sofort.
+      const last = state.queue.length ? state.queue[state.queue.length - 1] : state.dir;
+      if (last.x === -x && last.y === -y) return;
+      if (last.x ===  x && last.y ===  y) return;
+      if (state.queue.length < 2) state.queue.push({ x, y });
+    }
+
+    const KEYS = {
+      ArrowUp:    [0, -1], ArrowDown:  [0,  1],
+      ArrowLeft:  [-1, 0], ArrowRight: [1,  0],
+      w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0]
+    };
+
+    document.addEventListener('keydown', (e) => {
+      if (!document.getElementById('screen-game').classList.contains('active')) return;
+
+      if (e.key === ' ') { e.preventDefault(); togglePause(); return; }
+
+      const move = KEYS[e.key] || KEYS[e.key.toLowerCase()];
+      if (move) { e.preventDefault(); setDir(move[0], move[1]); }
+    });
+
+    // Wischen am Touchscreen
+    let touchStart = null;
+    canvas.addEventListener('touchstart', (e) => {
+      touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }, { passive: true });
+
+    canvas.addEventListener('touchend', (e) => {
+      if (!touchStart) return;
+      const dx = e.changedTouches[0].clientX - touchStart.x;
+      const dy = e.changedTouches[0].clientY - touchStart.y;
+      touchStart = null;
+      if (Math.abs(dx) < 24 && Math.abs(dy) < 24) return;
+      if (Math.abs(dx) > Math.abs(dy)) setDir(dx > 0 ? 1 : -1, 0);
+      else                             setDir(0, dy > 0 ? 1 : -1);
+    }, { passive: true });
+
+    function togglePause() {
+      if (!state.running && !state.paused) return;   // während des Countdowns nichts tun
+      state.paused = !state.paused;
+      document.getElementById('pause-btn').textContent = state.paused ? '▶ Weiter' : '⏸ Pause';
+
+      if (state.paused) {
+        stopLoop();
+        state.paused = true;
+        overlay.classList.add('active');
+        overlay.innerHTML = '⏸<small>Leertaste zum Weiterspielen</small>';
+      } else {
+        overlay.classList.remove('active');
+        beginLoop();
+      }
+    }
+
+    /* ---------- Spiellogik ---------- */
+
+    function spawnFood() {
+      const frei = [];
+      for (let y = 0; y < GRID; y++) {
+        for (let x = 0; x < GRID; x++) {
+          if (!state.snake.some(s => s.x === x && s.y === y)) frei.push({ x, y });
+        }
+      }
+      if (!frei.length) return;   // Beet voll — gewinnt beim nächsten Tick sowieso
+      state.food  = frei[Math.floor(Math.random() * frei.length)];
+      state.fruit = FRUITS[Math.floor(Math.random() * FRUITS.length)];
+    }
+
+    function tick() {
+      if (state.queue.length) state.dir = state.queue.shift();
+
+      state.prev = state.snake.map(s => ({ ...s }));
+
+      const head = {
+        x: state.snake[0].x + state.dir.x,
+        y: state.snake[0].y + state.dir.y
+      };
+
+      if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID) {
+        return gameOver('wand');
+      }
+
+      const eating = state.food && head.x === state.food.x && head.y === state.food.y;
+
+      // Der Schwanz rückt nach — auf sein Feld darf der Kopf, solange nicht gewachsen wird.
+      const body = eating ? state.snake : state.snake.slice(0, -1);
+      if (body.some(s => s.x === head.x && s.y === head.y)) {
+        return gameOver('selbst');
+      }
+
+      state.snake.unshift(head);
+      if (eating) {
+        state.score++;
+        updateScore();
+        spawnFood();
+      } else {
+        state.snake.pop();
+      }
+
+      state.lastTick = performance.now();
+
+      if (state.snake.length === GRID * GRID) gameOver('gewonnen');
+    }
+
+    function updateScore() {
+      document.getElementById('score').textContent = '🍎 ' + state.score;
+    }
+
+    function gameOver(grund) {
+      stopLoop();
+
+      const rekord = loadRecord(state.speed);
+      const neu    = state.score > rekord;
+      if (neu) saveRecord(state.speed, state.score);
+
+      const texte = {
+        wand:      ['🧱', 'Autsch — gegen die Beetkante gekracht!'],
+        selbst:    ['🌀', 'Ups — in den eigenen Schwanz gebissen!'],
+        gewonnen:  ['👑', 'Wahnsinn — das ganze Beet leergefuttert!']
+      };
+      const [emoji, text] = texte[grund];
+
+      document.getElementById('over-emoji').textContent = emoji;
+      document.getElementById('over-reason').textContent = text;
+      document.getElementById('final-score').textContent =
+        `${state.score} ${state.score === 1 ? 'Frucht' : 'Früchte'} gefressen`;
+      document.getElementById('record-badge').style.display = neu ? '' : 'none';
+
+      setTimeout(() => showScreen('screen-over'), 500);
+    }
+
+    /* ---------- Zeichnen ---------- */
+
+    function render(now) {
+      if (!state.running) return;
+      const t = Math.min(1, (now - state.lastTick) / state.speed);
+      draw(t);
+      state.rafId = requestAnimationFrame(render);
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function draw(t) {
+      const size = GRID * cell;
+      ctx.clearRect(0, 0, size, size);
+
+      // Beet-Reihen
+      ctx.fillStyle = 'rgba(139,195,74,0.10)';
+      for (let y = 0; y < GRID; y += 2) {
+        ctx.fillRect(0, y * cell, size, cell);
+      }
+
+      // Futter
+      if (state.food) {
+        drawFruit(
+          state.food.x * cell + cell / 2,
+          state.food.y * cell + cell / 2
+        );
+      }
+
+      // Segmentpositionen, -farben und -dicken vorberechnen
+      const pts = state.snake.map((cur, i) => {
+        const old = state.prev[i] || cur;          // neu gewachsenes Segment bleibt stehen
+        const f   = state.snake.length > 1 ? i / (state.snake.length - 1) : 0;
+        return {
+          x: lerp(old.x, cur.x, t) * cell + cell / 2,
+          y: lerp(old.y, cur.y, t) * cell + cell / 2,
+          radius: cell * (i === 0 ? 0.48 : 0.44 - f * 0.12),
+          color: `rgb(${Math.round(lerp(244, 249, f))},` +
+                     `${Math.round(lerp( 98, 166, f))},` +
+                     `${Math.round(lerp( 58, 139, f))})`
+        };
+      });
+
+      // Von hinten nach vorne zeichnen, damit der Kopf obenauf liegt.
+      // Jedes Segment wird mit dem davor verbunden — sonst wirkt der Wurm
+      // wie eine Perlenkette statt wie ein Körper.
+      ctx.lineCap = 'round';
+      for (let i = pts.length - 1; i >= 0; i--) {
+        const p = pts[i];
+        ctx.fillStyle = ctx.strokeStyle = p.color;
+
+        if (i > 0) {
+          ctx.lineWidth = p.radius * 2;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(pts[i - 1].x, pts[i - 1].y);
+          ctx.stroke();
+        }
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      if (pts.length) drawFace(pts[0].x, pts[0].y, pts[0].radius);
+    }
+
+    const stillHalten = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function drawFruit(x, y) {
+      // Leichtes Pulsieren macht das Futter auf dem gestreiften Beet auffindbar.
+      const puls = stillHalten ? 1 : 1 + Math.sin(performance.now() / 260) * 0.06;
+      const r    = cell * 0.35 * puls;
+      const { body, leaf } = state.fruit;
+
+      // Stiel
+      ctx.strokeStyle = '#6d4c41';
+      ctx.lineWidth = Math.max(1.5, cell * 0.06);
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(x, y - r * 0.75);
+      ctx.lineTo(x, y - r * 1.45);
+      ctx.stroke();
+
+      // Blatt
+      ctx.fillStyle = leaf;
+      ctx.beginPath();
+      ctx.ellipse(x + r * 0.55, y - r * 1.3, r * 0.5, r * 0.26, -0.5, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Frucht mit Glanzlicht
+      const glanz = ctx.createRadialGradient(
+        x - r * 0.35, y - r * 0.35, r * 0.1,
+        x, y, r
+      );
+      glanz.addColorStop(0, '#ffffff');
+      glanz.addColorStop(0.35, body);
+      glanz.addColorStop(1, body);
+
+      ctx.fillStyle = glanz;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    function drawFace(x, y, radius) {
+      const d  = state.dir;
+      const ax = d.x * radius * 0.42;              // Blickrichtung
+      const ay = d.y * radius * 0.42;
+      const px = d.y * radius * 0.40;              // seitlicher Augenabstand
+      const py = d.x * radius * 0.40;
+
+      for (const s of [1, -1]) {
+        const ex = x + ax + px * s;
+        const ey = y + ay + py * s;
+
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.arc(ex, ey, radius * 0.30, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = '#2f2119';
+        ctx.beginPath();
+        ctx.arc(ex + d.x * radius * 0.09, ey + d.y * radius * 0.09, radius * 0.15, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+  </script>
+</body>
+</html>
